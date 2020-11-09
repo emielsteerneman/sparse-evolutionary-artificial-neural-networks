@@ -243,7 +243,7 @@ class SET_MLP:
 
         for i in range(1, self.n_layers):
             z[i + 1] = a[i] @ self.w[i] + self.b[i]
-            if (drop == False):
+            if not drop:
                 if (i > 1):
                     z[i + 1] = z[i + 1] * (1 - self.droprate)
             a[i + 1] = self.activations[i + 1].activation(z[i + 1])
@@ -373,8 +373,6 @@ class SET_MLP:
                 k = j * batch_size
                 l = (j + 1) * batch_size
                 z, a = self._feed_forward(x_[k:l], True)
-
-
                 self._back_prop(z, a, y_[k:l])
 
             t2 = datetime.datetime.now()
@@ -580,30 +578,41 @@ class SET_MLP:
         accuracy = correctClassification / y_test.shape[0]
         return accuracy, activations
 
-def load_fashion_mnist_data(noTrainingSamples,noTestingSamples):
-    np.random.seed(0)
+def load_fashion_mnist_data(noTrainingSamples, noTestingSamples, classes=None, seed=None):
+    # If seed is None, then RandomState will try to read data from /dev/urandom
+    # (or the Windows analogue) if available or seed from the clock otherwise.
+    np.random.seed(seed)
 
-    data=np.load("../Tutorial-IJCAI-2019-Scalable-Deep-Learning/data/fashion_mnist.npz")
+    if classes is None:
+        classes = list(range(10)) # Activate all classes
 
-    indexTrain=np.arange(data["X_train"].shape[0])
-    np.random.shuffle(indexTrain)
+    # Load data
+    data = np.load("../Tutorial-IJCAI-2019-Scalable-Deep-Learning/data/fashion_mnist.npz")
 
-    indexTest=np.arange(data["X_test"].shape[0])
-    np.random.shuffle(indexTest)
+    # Get active classes, one-hot encoded
+    activeClasses = np.eye(10)[:, ::-1][classes].tolist()
+    # Function to check if class is active
+    isActive = lambda oneHotRow : oneHotRow.tolist() in activeClasses
 
-    X_train=data["X_train"][indexTrain[0:noTrainingSamples],:]
-    Y_train=data["Y_train"][indexTrain[0:noTrainingSamples],:]
-    X_test=data["X_test"][indexTest[0:noTestingSamples],:]
-    Y_test=data["Y_test"][indexTest[0:noTestingSamples],:]
+    activeIndicesTrain = np.where([isActive(row) for row in data["Y_train"]])[0]
+    activeIndicesTest  = np.where([isActive(row) for row in data["Y_test"]])[0]
 
-    #normalize in 0..1
+    np.random.shuffle(activeIndicesTrain)
+    np.random.shuffle(activeIndicesTest)
+
+    X_train = data["X_train"][activeIndicesTrain[0:noTrainingSamples], :]
+    Y_train = data["Y_train"][activeIndicesTrain[0:noTrainingSamples], :]
+    X_test = data["X_test"][activeIndicesTest[0:noTestingSamples], :]
+    Y_test = data["Y_test"][activeIndicesTest[0:noTestingSamples], :]
+
+    # normalize in 0..1
     X_train = X_train.astype('float64') / 255.
     X_test = X_test.astype('float64') / 255.
 
     return X_train, Y_train, X_test, Y_test
 
 def load_cifar10_data(noTrainingSamples,noTestingSamples):
-    np.random.seed(0)
+    # np.random.seed(0)
 
     # read CIFAR10 data
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
