@@ -42,9 +42,10 @@ import datetime
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import multiprocessing as mp
-from keras.datasets import cifar10
-from keras.utils import np_utils
-from keras.preprocessing.image import ImageDataGenerator
+
+# from keras.datasets import cifar10
+# from keras.utils import np_utils
+# from keras.preprocessing.image import ImageDataGenerator
 
 
 def backpropagation_updates_Numpy(a, delta, rows, cols, out):
@@ -360,6 +361,9 @@ class SET_MLP:
         metrics = np.zeros((epochs, 4))
 
         for i in range(epochs):
+
+            log = "[fit] Epoch %d" % i
+
             # Shuffle the data
             seed = np.arange(x.shape[0])
             np.random.shuffle(seed)
@@ -377,8 +381,7 @@ class SET_MLP:
 
             t2 = datetime.datetime.now()
 
-            print("\nSET-MLP Epoch ", i)
-            print("Training time: ", t2 - t1)
+            # log += "; training: " + str(t2 - t1)
 
             # test model performance on the test data at each epoch
             # this part is useful to understand model performance and can be commented for production settings
@@ -387,6 +390,7 @@ class SET_MLP:
                 accuracy_test, activations_test = self.predict(x_test, y_test, self.batchSize)
                 accuracy_train, activations_train = self.predict(x, y_true, self.batchSize)
                 t4 = datetime.datetime.now()
+
                 maximum_accuracy = max(maximum_accuracy, accuracy_test)
                 loss_test = self.loss.loss(y_test, activations_test)
                 loss_train = self.loss.loss(y_true, activations_train)
@@ -394,20 +398,27 @@ class SET_MLP:
                 metrics[i, 1] = loss_test
                 metrics[i, 2] = accuracy_train
                 metrics[i, 3] = accuracy_test
-                print("Testing time: ", t4 - t3,"; Loss train: ", loss_train, "; Loss test: ", loss_test, "; Accuracy train: ", accuracy_train,"; Accuracy test: ", accuracy_test,
-                      "; Maximum accuracy test: ", maximum_accuracy)
+
+                log += "; accuracy train: %0.4f" % accuracy_train
+                log += "; accuracy test: %0.4f" % accuracy_test
+
+                # print("Testing time: ", t4 - t3,"; Loss train: ", loss_train, "; Loss test: ", loss_test, "; Accuracy train: ", accuracy_train,"; Accuracy test: ", accuracy_test,
+                #       "; Maximum accuracy test: ", maximum_accuracy)
 
             t5 = datetime.datetime.now()
             if (i < epochs - 1):  # do not change connectivity pattern after the last epoch
                 # self.weightsEvolution_I() #this implementation is more didactic, but slow.
                 self.weightsEvolution_II()  # this implementation has the same behaviour as the one above, but it is much faster.
             t6 = datetime.datetime.now()
-            print("Weights evolution time ", t6 - t5)
+
+            # log += "; evolution: " + str(t6 - t5)
 
             # save performance metrics values in a file
             if (self.save_filename != ""):
                 np.savetxt(self.save_filename+".txt", metrics)
 
+            print("\r%s" % log, end="")
+        print("\nTraining complete")
         return metrics
 
     def getCoreInputConnections(self):
@@ -611,37 +622,37 @@ def load_fashion_mnist_data(noTrainingSamples, noTestingSamples, classes=None, s
 
     return X_train, Y_train, X_test, Y_test
 
-def load_cifar10_data(noTrainingSamples,noTestingSamples):
-    # np.random.seed(0)
-
-    # read CIFAR10 data
-    (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-
-    y_train = np_utils.to_categorical(y_train, 10)
-    y_test = np_utils.to_categorical(y_test, 10)
-    x_train = x_train.astype('float32')
-    x_test = x_test.astype('float32')
-
-    indexTrain = np.arange(x_train.shape[0])
-    np.random.shuffle(indexTrain)
-
-    indexTest = np.arange(x_test.shape[0])
-    np.random.shuffle(indexTest)
-
-    x_train = x_train[indexTrain[0:noTrainingSamples], :]
-    y_train = y_train[indexTrain[0:noTrainingSamples], :]
-    x_test = x_test[indexTest[0:noTestingSamples], :]
-    y_test = y_test[indexTest[0:noTestingSamples], :]
-
-    # normalize data
-    xTrainMean = np.mean(x_train, axis=0)
-    xTtrainStd = np.std(x_train, axis=0)
-    x_train = (x_train - xTrainMean) / xTtrainStd
-    x_test = (x_test - xTrainMean) / xTtrainStd
-
-    x_train = x_train.reshape(-1, 32 * 32 * 3).astype('float64')
-    x_test = x_test.reshape(-1, 32 * 32 * 3).astype('float64')
-    return x_train, y_train, x_test, y_test
+# def load_cifar10_data(noTrainingSamples,noTestingSamples):
+#     # np.random.seed(0)
+#
+#     # read CIFAR10 data
+#     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+#
+#     y_train = np_utils.to_categorical(y_train, 10)
+#     y_test = np_utils.to_categorical(y_test, 10)
+#     x_train = x_train.astype('float32')
+#     x_test = x_test.astype('float32')
+#
+#     indexTrain = np.arange(x_train.shape[0])
+#     np.random.shuffle(indexTrain)
+#
+#     indexTest = np.arange(x_test.shape[0])
+#     np.random.shuffle(indexTest)
+#
+#     x_train = x_train[indexTrain[0:noTrainingSamples], :]
+#     y_train = y_train[indexTrain[0:noTrainingSamples], :]
+#     x_test = x_test[indexTest[0:noTestingSamples], :]
+#     y_test = y_test[indexTest[0:noTestingSamples], :]
+#
+#     # normalize data
+#     xTrainMean = np.mean(x_train, axis=0)
+#     xTtrainStd = np.std(x_train, axis=0)
+#     x_train = (x_train - xTrainMean) / xTtrainStd
+#     x_test = (x_test - xTrainMean) / xTtrainStd
+#
+#     x_train = x_train.reshape(-1, 32 * 32 * 3).astype('float64')
+#     x_test = x_test.reshape(-1, 32 * 32 * 3).astype('float64')
+#     return x_train, y_train, x_test, y_test
 
 
 def image_data_augmentation(x_train):
