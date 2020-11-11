@@ -39,17 +39,18 @@ parser.add_argument('--num-processes', type=int, default=4, metavar='N',
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='enables CUDA training')
 
+def getCircular(classes):
+    return list(zip(classes, classes[1:] + [classes[0]]))
+
+def getDense(classes):
+    if len(classes) < 2:
+        return []
+    a, *b = classes
+    combinations = [[a, c] for c in b]
+    return combinations + getDense(b)
+
 if __name__ == "__main__":
     args = parser.parse_args()
-
-
-    ### Load datasets
-    nTrainingSamples = 1000
-    nTestingSamples = 1000
-    xtrain, ytrain, xtest, ytest = load_fashion_mnist_data(10000, 10000, [1, 2, 3])
-    xtrain_12, ytrain_12, xtest_12, ytest_12 = load_fashion_mnist_data(nTrainingSamples, nTestingSamples, [1, 2])
-    xtrain_23, ytrain_23, xtest_23, ytest_23 = load_fashion_mnist_data(nTrainingSamples, nTestingSamples, [2, 3])
-    xtrain_13, ytrain_13, xtest_13, ytest_13 = load_fashion_mnist_data(nTrainingSamples, nTestingSamples, [1, 3])
 
     #set model parameters
     noHiddenNeuronsLayer = args.no_neurons
@@ -62,74 +63,71 @@ if __name__ == "__main__":
     momentum = args.momentum
     weightDecay = args.weight_decay
 
+    nEpochs = 200
+
+    # Samples per class
+    spc = 500
 
     # create SET-MLP (MLP with adaptive sparse connectivity trained with Sparse Evolutionary Training)
     getSET = lambda : SET_MLP((784, 200, 10), (Sigmoid, Sigmoid, Sigmoid), epsilon=3)
+    trainSet = lambda nn, xtr, ytr, xte, yte : nn.fit(xtr, ytr, xte, yte, loss=MSE, epochs=nEpochs, batch_size=batchSize, learning_rate=learningRate, momentum=momentum, weight_decay=weightDecay, zeta=zeta, dropoutrate=dropoutRate, testing=True)
 
-    set12 = getSET()
-    set23 = getSET()
-    set13 = getSET()
+    classes = [0, 1, 2, 3]
+    xtrain, ytrain, xtest, ytest = load_fashion_mnist_data(10000, 10000, classes)
 
-    nEpochs = 200
+    # Train networks on data subsets
+    networks = []
+    for c1, c2 in getDense(classes):
+        print("[zip] Working on classes %d and %d" % (c1, c2))
+        xtr, ytr, xte, yte = load_fashion_mnist_data(spc*2,  spc*2, [c1, c2])
+        nn = getSET()
+        trainSet(nn, xtr, ytr, xte, yte)
+        networks.append([nn, [c1, c2]])
 
-    # train SET-MLP
-    set12.fit(xtrain_12, ytrain_12, xtest_12, ytest_12, loss=MSE, epochs=nEpochs, batch_size=batchSize, learning_rate=learningRate,
-                momentum=momentum, weight_decay=weightDecay, zeta=zeta, dropoutrate=dropoutRate, testing=True)
-
-    set23.fit(xtrain_23, ytrain_23, xtest_23, ytest_23, loss=MSE, epochs=nEpochs, batch_size=batchSize, learning_rate=learningRate,
-                 momentum=momentum, weight_decay=weightDecay, zeta=zeta, dropoutrate=dropoutRate, testing=True)
-
-    set13.fit(xtrain_13, ytrain_13, xtest_13, ytest_13, loss=MSE, epochs=nEpochs, batch_size=batchSize, learning_rate=learningRate,
-              momentum=momentum, weight_decay=weightDecay, zeta=zeta, dropoutrate=dropoutRate, testing=True)
-
-    # test SET-MLP
-    print("\n\n=============== Testing networks ===============")
-    print("        Train Test")
-    accuracy1, _ = set12.predict(xtest_12, ytest_12, batch_size=1)
-    accuracy2, _ = set12.predict(xtest, ytest, batch_size=1)
-    print("SET12 - %0.2f  %0.2f " % (accuracy1, accuracy2))
-
-    accuracy1, _ = set23.predict(xtest_23, ytest_23, batch_size=1)
-    accuracy2, _ = set23.predict(xtest, ytest, batch_size=1)
-    print("SET23 - %0.2f  %0.2f " % (accuracy1, accuracy2))
-
-    accuracy1, _ = set13.predict(xtest_13, ytest_13, batch_size=1)
-    accuracy2, _ = set13.predict(xtest, ytest, batch_size=1)
-    print("SET13 - %0.2f  %0.2f " % (accuracy1, accuracy2))
+    # Test networks on data subsets and complete dataset
+    print("        c1c2   all")
+    for nn, [c1, c2] in networks:
+        _, _, xte, yte = load_fashion_mnist_data(spc*2, spc*2, [c1, c2])
+        acc1, _ = nn.predict(xte, yte, batch_size=1)
+        acc2, _ = nn.predict(xtest, ytest, batch_size=1)
+        print("%d & %d : %.3f  %.3f" % (c1, c2, acc1, acc2))
 
     print("\nCreating new SET")
-    set123 = getSET()
-    set123.w[1].data.fill(0)
-    set123.w[2].data.fill(0)
-    set123.b[1].fill(0)
-    set123.b[2].fill(0)
+    setMerged = getSET()
+    # setMerged.w[1].data.fill(0)
+    # setMerged.w[2].data.fill(0)
+    # setMerged.b[1].fill(0)
+    # setMerged.b[2].fill(0)
 
     print("\n=== Performance before merging ===")
-    accuracy12, _ = set123.predict(xtest_12, ytest_12, batch_size=1)
-    accuracy23, _ = set123.predict(xtest_23, ytest_23, batch_size=1)
-    accuracy13, _ = set123.predict(xtest_13, ytest_13, batch_size=1)
-    accuracy123,_ = set123.predict(xtest, ytest, batch_size=1)
-    print("SET123 -  12 %0.2f" % accuracy12)
-    print("SET123 -  23 %0.2f" % accuracy23)
-    print("SET123 -  13 %0.2f" % accuracy13)
-    print("SET123 - 123 %0.2f" % accuracy123)
+    acc, _ = setMerged.predict(xtest, ytest, batch_size=1)
+    print("setMerged : %.3f" % acc)
 
-    merge_topk_all(set12, set23, set13, nnTo=set123, logging=False, prune=True)
 
+
+    # Train network on all classes
+    print("\n=== Performance after training ===")
+    sets = load_fashion_mnist_data(spc*len(classes), spc*len(classes), classes)
+    trainSet(setMerged, *sets)
+    acc, _ = setMerged.predict(xtest, ytest, batch_size=1)
+    print("setMerged : %.3f" % acc)
+
+    print("\n=== Performance after training on individual classes ===")
+    for i in classes:
+        _, _, xte, yte = load_fashion_mnist_data(0, 10000, [i])
+        acc, _ = setMerged.predict(xte, yte, batch_size=1)
+        print("    class %d : %0.3f" % (i, acc))
+
+
+
+    # Merge subnetworks
     print("\n=== Performance after merging ===")
-    accuracy12, _ = set123.predict(xtest_12, ytest_12, batch_size=1)
-    accuracy23, _ = set123.predict(xtest_23, ytest_23, batch_size=1)
-    accuracy13, _ = set123.predict(xtest_13, ytest_13, batch_size=1)
-    accuracy123,_ = set123.predict(xtest, ytest, batch_size=1)
-    print("SET123 -  12 %0.2f" % accuracy12)
-    print("SET123 -  23 %0.2f" % accuracy23)
-    print("SET123 -  13 %0.2f" % accuracy13)
-    print("SET123 - 123 %0.2f" % accuracy123)
+    merge_topk_all(*[n[0] for n in networks], nnTo=setMerged, logging=False, prune=True)
+    acc, _ = setMerged.predict(xtest, ytest, batch_size=1)
+    print("setMerged : %.3f" % acc)
 
-    for i in [1, 2, 3]:
-        trainX, trainY, testX, testY = load_fashion_mnist_data(10000, 10000, [i])
-        accuracyTrain, _ = set123.predict(trainX, trainY, batch_size=1)
-        accuracyTest,  _ = set123.predict(testX, testY, batch_size=1)
-        print("    class %d : train %0.2f %0.2f test" % (i, accuracyTrain, accuracyTest))
-
-    exit()
+    print("\n=== Performance after merging on individual classes ===")
+    for i in classes:
+        _, _, xte, yte = load_fashion_mnist_data(0, 10000, [i])
+        acc,  _ = setMerged.predict(xte, yte, batch_size=1)
+        print("    class %d : %0.3f" % (i, acc))

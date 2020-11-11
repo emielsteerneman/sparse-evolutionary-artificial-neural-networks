@@ -71,8 +71,8 @@ def createSparseWeights(epsilon, noRows, noCols):
     weights = lil_matrix((noRows, noCols))
     for i in range(epsilon * (noRows + noCols)):
         weights[np.random.randint(0, noRows), np.random.randint(0, noCols)] = np.float64(np.random.randn() / 10)
-    print("Create sparse matrix with ", weights.getnnz(), " connections and ",
-          (weights.getnnz() / (noRows * noCols)) * 100, "% density level")
+    # print("Create sparse matrix with ", weights.getnnz(), " connections and ",
+    #       (weights.getnnz() / (noRows * noCols)) * 100, "% density level")
     weights = weights.tocsr()
     return weights
 
@@ -227,7 +227,7 @@ class SET_MLP:
         #         self.activations[i + 2] = activations[i]
         t2 = datetime.datetime.now()
 
-        print("Creation sparse weights time: ", t2 - t1)
+        # print("Creation sparse weights time: ", t2 - t1)
 
     def _feed_forward(self, x, drop=False):
         """
@@ -418,7 +418,7 @@ class SET_MLP:
                 np.savetxt(self.save_filename+".txt", metrics)
 
             print("\r%s" % log, end="")
-        print("\nTraining complete")
+        print(" - Complete")
         return metrics
 
     def getCoreInputConnections(self):
